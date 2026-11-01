@@ -1,0 +1,46 @@
+name: Build O.C.C Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'OCC_Engineering_App_Starter-1.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract starter project
+        run: |
+          mkdir -p app
+          unzip -q OCC_Engineering_App_Starter-1.zip -d app
+          PROJECT_DIR=$(find app -name pubspec.yaml -printf '%h\n' | head -n 1)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Flutter project not found in ZIP"
+            exit 1
+          fi
+          echo "APP_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: ${{ env.APP_DIR }}
+
+      - name: Build release APK
+        run: flutter build apk --release
+        working-directory: ${{ env.APP_DIR }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OCC-Engineering-APK
+          path: ${{ env.APP_DIR }}/build/app/outputs/flutter-apk/app-release.apk
