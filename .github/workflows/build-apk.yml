@@ -49,14 +49,14 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("${APP_DIR}/lib/main.dart")
+          p = Path("app/lib/main.dart")
           lines = p.read_text(encoding="utf-8").splitlines()
           for n in (147, 151, 156):
               i = n - 1
-              if i < len(lines) and lines[i].endswith("));}}"):
-                  lines[i] = lines[i][:-1]
+              if i < len(lines) and lines[i].rstrip().endswith("));}}"):
+                  lines[i] = lines[i].rstrip()[:-1]
               else:
-                  raise SystemExit(f"Unexpected source at lib/main.dart:{n}; refusing unsafe patch")
+                  raise SystemExit(f"Unexpected source at lib/main.dart:{n}: {lines[i] if i < len(lines) else 'EOF'}")
           p.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
           print("Corrected the three extra closing braces.")
           PY
