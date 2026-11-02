@@ -9,7 +9,7 @@ on:
       - '.github/workflows/build-apk.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -110,3 +110,13 @@ jobs:
           path: ${{ env.APP_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="${APP_DIR}/build/app/outputs/flutter-apk/app-release.apk"
+          if ! gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release create v1.0.0 --title "O.C.C Engineering v1.0.0" --notes "O.C.C Engineering Android application. Download OCC_Engineering.apk below."
+          fi
+          gh release upload v1.0.0 "$APK" --clobber --name OCC_Engineering.apk
