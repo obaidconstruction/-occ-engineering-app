@@ -20,18 +20,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check ZIP file
+      - name: Find and extract Flutter project ZIP
         run: |
-          if [ ! -f OCC_Engineering_App_Full_Services.zip ]; then
-            echo "ERROR: Full Services ZIP not found!"
+          ZIP_PATH=$(find . -maxdepth 1 -type f \( -name "*.zip" -o -name "*.zip.zip" \) | head -n 1)
+
+          if [ -z "$ZIP_PATH" ]; then
+            echo "ERROR: No project ZIP found in repository root!"
+            ls -la
             exit 1
           fi
 
-      - name: Extract Flutter project
-        run: |
+          echo "Using project archive: $ZIP_PATH"
           mkdir -p app
-
-          unzip -q OCC_Engineering_App_Full_Services.zip -d app
+          unzip -q "$ZIP_PATH" -d app
 
           PROJECT_DIR=$(find app -name pubspec.yaml -printf '%h\n' | head -n 1)
 
