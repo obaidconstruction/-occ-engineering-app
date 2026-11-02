@@ -45,6 +45,22 @@ jobs:
 
           echo "Flutter project found at: $PROJECT_DIR"
 
+      - name: Fix known Dart closing-brace typos
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("${APP_DIR}/lib/main.dart")
+          lines = p.read_text(encoding="utf-8").splitlines()
+          for n in (147, 151, 156):
+              i = n - 1
+              if i < len(lines) and lines[i].endswith("));}}"):
+                  lines[i] = lines[i][:-1]
+              else:
+                  raise SystemExit(f"Unexpected source at lib/main.dart:{n}; refusing unsafe patch")
+          p.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+          print("Corrected the three extra closing braces.")
+          PY
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
