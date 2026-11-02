@@ -57,7 +57,7 @@ jobs:
                   lines[i] = lines[i].rstrip()[:-1]
               else:
                   raise SystemExit(f"Unexpected source at lib/main.dart:{n}: {lines[i] if i < len(lines) else 'EOF'}")
-          p.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+          p.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("Corrected the three extra closing braces.")
           PY
 
