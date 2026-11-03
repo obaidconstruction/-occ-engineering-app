@@ -56,9 +56,50 @@ jobs:
           print("Corrected the three extra closing braces.")
           PY
 
-      - name: Locate Projects service in source
+      - name: Remove Projects service completely
         run: |
-          grep -Rni -C 5 -E 'Projects|پروژ' app --include='*.dart' || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("app/lib/main.dart")
+          s = p.read_text(encoding="utf-8")
+
+          # Remove the Projects tab and make Profile the third tab.
+          s, n1 = re.subn(
+              r"(?m)^\s*: tab == 2\n\s*\? ProjectsPage\(pashto: pashto\)\n\s*: _ProfileTab\(pashto: pashto\),",
+              "                : _ProfileTab(pashto: pashto),", s)
+          if n1 != 1:
+              raise SystemExit(f"Expected one Projects tab branch, found {n1}")
+
+          # Remove the Projects bottom-navigation destination.
+          s, n2 = re.subn(
+              r"(?m)^\s*NavigationDestination\([^\n]*label: t\('پروژې', 'Projects'\)\),\n", "", s)
+          if n2 != 1:
+              raise SystemExit(f"Expected one Projects navigation item, found {n2}")
+
+          # Remove Projects from the tool-page routing list.
+          s, n3 = re.subn(r"(?m)^\s*ProjectsPage\(pashto: pashto\),\n", "", s)
+          if n3 != 1:
+              raise SystemExit(f"Expected one Projects route entry, found {n3}")
+
+          # Remove the Projects service card from the services list.
+          s, n4 = re.subn(
+              r"(?m)^\s*\[Icons\.apartment, t\('پروژې', 'Projects'\), t\('د پروژو معلومات او ثبت', 'Project information and entry'\)\],\n", "", s)
+          if n4 != 1:
+              raise SystemExit(f"Expected one Projects service card, found {n4}")
+
+          # Remove the Projects page and its state/controller implementation.
+          s, n5 = re.subn(
+              r"(?m)^class ProjectsPage extends StatefulWidget\{[^\n]*\}\nclass _ProjectsPageState extends State<ProjectsPage>\{[^\n]*\}\n?", "", s)
+          if n5 != 1:
+              raise SystemExit(f"Expected one Projects implementation, found {n5}")
+
+          if re.search(r"ProjectsPage|Projects|پروژ", s, re.IGNORECASE):
+              raise SystemExit("Projects references remain in main.dart; refusing incomplete removal")
+
+          p.write_text(s, encoding="utf-8")
+          print("Projects service, navigation item, route, page and state code removed.")
+          PY
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
