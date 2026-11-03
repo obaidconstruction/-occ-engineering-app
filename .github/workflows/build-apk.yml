@@ -1,4 +1,3 @@
-
 name: Build O.C.C Android APK
 
 on:
@@ -6,6 +5,8 @@ on:
   push:
     paths:
       - 'OCC_Engineering_App_Full_Services.zip'
+      - 'OCC_Engineering_App_Full_Services.zip.zip'
+      - 'assets/occ_official_icon.webp'
       - '.github/workflows/build-apk.yml'
 
 permissions:
@@ -23,24 +24,19 @@ jobs:
       - name: Find and extract Flutter project ZIP
         run: |
           ZIP_PATH=$(find . -maxdepth 1 -type f \( -name "*.zip" -o -name "*.zip.zip" \) | head -n 1)
-
           if [ -z "$ZIP_PATH" ]; then
             echo "ERROR: No project ZIP found in repository root!"
             ls -la
             exit 1
           fi
-
           echo "Using project archive: $ZIP_PATH"
           mkdir -p app
           unzip -q "$ZIP_PATH" -d app
-
           PROJECT_DIR=$(find app -name pubspec.yaml -printf '%h\n' | head -n 1)
-
           if [ -z "$PROJECT_DIR" ]; then
             echo "ERROR: Flutter project not found!"
             exit 1
           fi
-
           echo "APP_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Flutter project found at: $PROJECT_DIR"
 
@@ -70,12 +66,41 @@ jobs:
         run: flutter --version
 
       - name: Generate Android platform
-        working-directory: app
         run: |
           cd "$GITHUB_WORKSPACE/$APP_DIR"
           if [ ! -f android/app/build.gradle ] && [ ! -f android/app/build.gradle.kts ]; then
             flutter create --platforms=android .
           fi
+
+      - name: Apply official O.C.C launcher icon
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          APP="$GITHUB_WORKSPACE/$APP_DIR"
+          RES="$APP/android/app/src/main/res"
+          mkdir -p "$RES/drawable-nodpi" "$RES/values"
+          convert "$GITHUB_WORKSPACE/assets/occ_official_icon.webp" -resize 432x432^ -gravity center -extent 432x432 "$RES/drawable-nodpi/occ_launcher.png"
+          for spec in "mdpi 48" "hdpi 72" "xhdpi 96" "xxhdpi 144" "xxxhdpi 192"; do
+            set -- $spec
+            mkdir -p "$RES/mipmap-$1"
+            convert "$GITHUB_WORKSPACE/assets/occ_official_icon.webp" -resize "${2}x${2}^" -gravity center -extent "${2}x${2}" "$RES/mipmap-$1/ic_launcher.png"
+            cp "$RES/mipmap-$1/ic_launcher.png" "$RES/mipmap-$1/ic_launcher_round.png"
+          done
+          cat > "$RES/values/occ_icon_colors.xml" <<'EOF'
+          <resources>
+              <color name="occ_launcher_background">#050505</color>
+          </resources>
+          EOF
+          mkdir -p "$RES/mipmap-anydpi-v26"
+          for icon in ic_launcher ic_launcher_round; do
+            cat > "$RES/mipmap-anydpi-v26/$icon.xml" <<'EOF'
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/occ_launcher_background" />
+              <foreground android:drawable="@drawable/occ_launcher" />
+          </adaptive-icon>
+          EOF
+          done
+          echo "Official O.C.C launcher icon applied."
 
       - name: Install dependencies
         run: flutter pub get
