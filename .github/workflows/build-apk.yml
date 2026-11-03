@@ -200,7 +200,7 @@ jobs:
             bool shouldRepaint(covariant _MeasurePointsPainter old) => old.points != points;
           }
           """
-          pattern = r"class CameraMeasurePage extends StatelessWidget\{.*?(?=\nclass ProjectsPage)"
+          pattern = r"class CameraMeasurePage extends StatelessWidget\s*\{.*?(?=\nclass )"
           s, n = re.subn(pattern, new_class.strip() + "\n", s, flags=re.S)
           if n != 1:
               raise SystemExit(f"Could not replace CameraMeasurePage (matches={n})")
