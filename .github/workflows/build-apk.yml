@@ -105,11 +105,12 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-          p = Path("$APP_DIR/lib/main.dart")
+          import os, re
+          app = Path(os.environ["APP_DIR"])
+          p = app / "lib/main.dart"
           s = p.read_text(encoding="utf-8")
           if "import 'dart:io';" not in s:
-              s = s.replace("import 'dart:math' as math;\\n", "import 'dart:math' as math;\\nimport 'dart:io';\\nimport 'package:image_picker/image_picker.dart';\\n", 1)
+              s = s.replace("import 'dart:math' as math;\n", "import 'dart:math' as math;\nimport 'dart:io';\nimport 'package:image_picker/image_picker.dart';\n", 1)
           new_class = r"""
           class CameraMeasurePage extends StatefulWidget {
             final bool pashto;
@@ -122,18 +123,19 @@ jobs:
             final reference = TextEditingController();
             XFile? photo;
             final List<Offset> points = [];
+            double? referencePixels;
             double? result;
             String t(String p, String e) => widget.pashto ? p : e;
             Future<void> takePhoto() async {
               try {
                 final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 90);
-                if (file != null && mounted) setState(() { photo = file; points.clear(); result = null; });
+                if (file != null && mounted) setState(() { photo = file; points.clear(); result = null; referencePixels = null; });
               } catch (_) {
                 if (mounted) _message(context, t('کمره پرانیستل نه شول. د کمرې اجازه وګورئ.', 'Could not open camera. Check camera permission.'));
               }
             }
             void measure(TapDownDetails d, Size size) {
-              if (photo == null) return;
+              if (photo == null || points.length >= 4) return;
               setState(() {
                 points.add(Offset(d.localPosition.dx / size.width, d.localPosition.dy / size.height));
                 if (points.length == 2) {
@@ -144,36 +146,38 @@ jobs:
                   } else {
                     final dx = (points[1].dx - points[0].dx) * size.width;
                     final dy = (points[1].dy - points[0].dy) * size.height;
-                    result = math.sqrt(dx * dx + dy * dy) / 100 * known;
+                    referencePixels = math.sqrt(dx * dx + dy * dy);
                   }
-                } else { result = null; }
+                } else if (points.length == 4 && referencePixels != null) {
+                  final dx = (points[3].dx - points[2].dx) * size.width;
+                  final dy = (points[3].dy - points[2].dy) * size.height;
+                  final objectPixels = math.sqrt(dx * dx + dy * dy);
+                  result = objectPixels / referencePixels! * double.parse(reference.text.replaceAll(',', '.'));
+                }
               });
             }
             @override
             void dispose() { reference.dispose(); super.dispose(); }
             @override
             Widget build(BuildContext context) => _pageScaffold(context, t('د کمرې اندازه‌ګیري','Camera Measurement'), ListView(padding: const EdgeInsets.all(16), children: [
-              _note(t('عکس واخله، په عکس کې د معلوم اوږدوالي مرجع (لکه متر) اندازه ولیکه، بیا د هغې د دواړو سرونو نقطې وټاکه. وروسته د اندازه کېدونکي شي د دواړو سرونو نقطې وټاکه.', 'Take a photo, enter the known reference length (such as a ruler/tape) in centimetres, then tap its two endpoints. Next tap the two endpoints of the object to measure.')),
+              _note(t('عکس واخله او په عکس کې یو معلوم اوږدوالی (لکه متر) وښیه. د هغه دواړه سرونه وټاکه، بیا د اندازه کېدونکي شي دواړه سرونه وټاکه.', 'Take a photo with a known length (such as a tape measure) visible. Tap its two endpoints, then tap the two endpoints of the object.')),
               const SizedBox(height: 12),
-              _field(reference, t('د مرجع اوږدوالی (سانتي‌متر)','Reference length (cm)'), keyboard: TextInputType.number),
+              _field(reference, t('د معلوم اوږدوالي اندازه (سانتي‌متر)','Known length (cm)'), keyboard: TextInputType.number),
               const SizedBox(height: 10),
               FilledButton.icon(onPressed: takePhoto, icon: const Icon(Icons.camera_alt), label: Text(t('کمره پرانیزه او عکس واخله','Open camera and take photo'))),
               if (photo != null) ...[
                 const SizedBox(height: 12),
-                Text(t('په عکس کې لومړی د مرجع دوه سرونه وټاکه؛ بیا د شي دوه سرونه.', 'Tap the two reference endpoints first, then the two object endpoints.'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(t('لومړی د معلوم متر دوه سرونه، بیا د شي دوه سرونه وټاکه.', 'Tap the two endpoints of the known reference first, then the object.'), style: const TextStyle(fontWeight: FontWeight.w700)),
                 LayoutBuilder(builder: (context, constraints) {
                   final size = Size(constraints.maxWidth, constraints.maxWidth * 1.25);
-                  return GestureDetector(
-                    onTapDown: (d) => measure(d, size),
-                    child: SizedBox(width: size.width, height: size.height, child: Stack(fit: StackFit.expand, children: [
-                      Image.file(File(photo!.path), fit: BoxFit.fill),
-                      CustomPaint(painter: _MeasurePointsPainter(points)),
-                    ])),
-                  );
+                  return GestureDetector(onTapDown: (d) => measure(d, size), child: SizedBox(width: size.width, height: size.height, child: Stack(fit: StackFit.expand, children: [
+                    Image.file(File(photo!.path), fit: BoxFit.fill),
+                    CustomPaint(painter: _MeasurePointsPainter(points)),
+                  ])));
                 }),
                 Text(t('ټاکل شوې نقطې: ', 'Selected points: ') + '${points.length}/4'),
                 if (result != null) _result(t('اندازه','Measurement'), ['${result!.toStringAsFixed(2)} cm']),
-                OutlinedButton(onPressed: () => setState(() { points.clear(); result = null; }), child: Text(t('نقطې بیا وټاکه','Reset points'))),
+                OutlinedButton(onPressed: () => setState(() { points.clear(); result = null; referencePixels = null; }), child: Text(t('نقطې بیا وټاکه','Reset points'))),
                 OutlinedButton(onPressed: takePhoto, child: Text(t('بل عکس واخله','Take another photo'))),
               ],
             ]));
@@ -184,29 +188,30 @@ jobs:
             @override
             void paint(Canvas canvas, Size size) {
               final paint = Paint()..color = Colors.red..style = PaintingStyle.fill;
-              for (final p in points) {
-                canvas.drawCircle(Offset(p.dx * size.width, p.dy * size.height), 7, paint);
-              }
+              for (final p in points) { canvas.drawCircle(Offset(p.dx * size.width, p.dy * size.height), 7, paint); }
               if (points.length >= 2) {
                 canvas.drawLine(Offset(points[0].dx * size.width, points[0].dy * size.height), Offset(points[1].dx * size.width, points[1].dy * size.height), Paint()..color = Colors.red..strokeWidth = 3);
+              }
+              if (points.length >= 4) {
+                canvas.drawLine(Offset(points[2].dx * size.width, points[2].dy * size.height), Offset(points[3].dx * size.width, points[3].dy * size.height), Paint()..color = Colors.green..strokeWidth = 3);
               }
             }
             @override
             bool shouldRepaint(covariant _MeasurePointsPainter old) => old.points != points;
           }
           """
-          pattern = r"class CameraMeasurePage extends StatelessWidget\\{.*?(?=\\nclass ProjectsPage)"
-          s, n = re.subn(pattern, new_class.strip() + "\\n", s, flags=re.S)
+          pattern = r"class CameraMeasurePage extends StatelessWidget\{.*?(?=\nclass ProjectsPage)"
+          s, n = re.subn(pattern, new_class.strip() + "\n", s, flags=re.S)
           if n != 1:
               raise SystemExit(f"Could not replace CameraMeasurePage (matches={n})")
           s = s.replace("t('د اندازې لارښود او ثبت', 'Measurement guide and notes')", "t('د کمرې له لارې اندازه کول', 'Measure with camera')")
           p.write_text(s, encoding="utf-8")
-          pub = Path("$APP_DIR/pubspec.yaml")
+          pub = app / "pubspec.yaml"
           ps = pub.read_text(encoding="utf-8")
           if "image_picker:" not in ps:
-              ps = ps.replace("  url_launcher: ^6.3.2", "  url_launcher: ^6.3.2\\n  image_picker: ^1.1.2")
+              ps = ps.replace("  url_launcher: ^6.3.2", "  url_launcher: ^6.3.2\n  image_picker: ^1.1.2")
           pub.write_text(ps, encoding="utf-8")
-          print("Camera photo capture and on-image measurement enabled.")
+          print("Camera photo capture and reference-based measurement enabled.")
           PY
 
       - name: Setup Flutter
