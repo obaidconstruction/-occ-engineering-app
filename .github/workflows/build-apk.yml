@@ -221,6 +221,90 @@ jobs:
           echo "=== MAIN DART START ==="
           sed -n '1,240p' "$APP_DIR/lib/main.dart"
 
+      - name: Add Dark and Light Mode
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, os
+          app = Path(os.environ["APP_DIR"])
+          p = app / "lib/main.dart"
+          s = p.read_text(encoding="utf-8")
+          if "package:shared_preferences/shared_preferences.dart" not in s:
+              s = s.replace("import 'package:flutter/material.dart';", "import 'package:flutter/material.dart';\nimport 'package:shared_preferences/shared_preferences.dart';", 1)
+          s = s.replace(
+              "void main() => runApp(const OCCApp());",
+              """Future<void> main() async {
+            WidgetsFlutterBinding.ensureInitialized();
+            final prefs = await SharedPreferences.getInstance();
+            runApp(OCCApp(initialDarkMode: prefs.getBool('occ_dark_mode') ?? false));
+          }""", 1)
+          s = s.replace(
+              "  const OCCApp({super.key});",
+              "  final bool initialDarkMode;\n  const OCCApp({super.key, this.initialDarkMode = false});", 1)
+          s = s.replace(
+              "  bool pashto = true;\n  int tab = 0;",
+              """  bool pashto = true;
+            late bool darkMode;
+            int tab = 0;
+            @override
+            void initState() {
+              super.initState();
+              darkMode = widget.initialDarkMode;
+            }
+            Future<void> _setDarkMode(String value) async {
+              final enabled = value == 'dark';
+              setState(() => darkMode = enabled);
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('occ_dark_mode', enabled);
+            }""", 1)
+          s = s.replace(
+              "    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: blue), scaffoldBackgroundColor: const Color(0xFFF6FAFD)),",
+              """    themeMode: darkMode ? ThemeMode.dark : ThemeMode.light,
+              theme: ThemeData(
+                useMaterial3: true,
+                colorScheme: ColorScheme.fromSeed(seedColor: blue, brightness: Brightness.light),
+                scaffoldBackgroundColor: const Color(0xFFF6FAFD),
+                appBarTheme: const AppBarTheme(backgroundColor: Colors.white, foregroundColor: navy),
+              ),
+              darkTheme: ThemeData(
+                useMaterial3: true,
+                colorScheme: ColorScheme.fromSeed(seedColor: blue, brightness: Brightness.dark),
+                scaffoldBackgroundColor: const Color(0xFF101820),
+                appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF17232D), foregroundColor: Colors.white),
+                cardTheme: const CardThemeData(color: Color(0xFF1B2A36)),
+              ),""", 1)
+          old_actions = "actions: [TextButton(onPressed: () => setState(() => pashto = !pashto), child: Text(pashto ? 'EN' : 'پښتو'))]"
+          new_actions = """actions: [
+                TextButton(onPressed: () => setState(() => pashto = !pashto), child: Text(pashto ? 'EN' : 'پښتو')),
+                PopupMenuButton<String>(
+                  tooltip: t('د بڼې ټاکنه', 'Appearance'),
+                  icon: const Icon(Icons.palette_outlined),
+                  onSelected: _setDarkMode,
+                  itemBuilder: (context) => [
+                    PopupMenuItem(value: 'light', child: Row(children: [const Icon(Icons.light_mode_outlined), const SizedBox(width: 10), Text(t('روښانه بڼه', 'Light Mode'))])),
+                    PopupMenuItem(value: 'dark', child: Row(children: [const Icon(Icons.dark_mode_outlined), const SizedBox(width: 10), Text(t('تیاره بڼه', 'Dark Mode'))])),
+                  ],
+                ),
+              ]"""
+          if old_actions not in s:
+              raise SystemExit("Could not locate the app bar actions for the theme selector.")
+          s = s.replace(old_actions, new_actions, 1)
+          s = s.replace(
+              "Widget _pageScaffold(BuildContext context,String title,Widget body)=>Scaffold(appBar:AppBar(title:Text(title),backgroundColor:Colors.white,foregroundColor:navy),body:body);",
+              "Widget _pageScaffold(BuildContext context,String title,Widget body)=>Scaffold(appBar:AppBar(title:Text(title)),body:body);", 1)
+          if "themeMode: darkMode ? ThemeMode.dark : ThemeMode.light" not in s or "PopupMenuButton<String>" not in s:
+              raise SystemExit("Dark/Light mode verification failed.")
+          p.write_text(s, encoding="utf-8")
+          pub = app / "pubspec.yaml"
+          ps = pub.read_text(encoding="utf-8")
+          if "shared_preferences:" not in ps:
+              ps = re.sub(r"(?m)^(  url_launcher:\s*[^\n]+)$", r"\1\n  shared_preferences: ^2.5.3", ps, count=1)
+          if "shared_preferences:" not in ps:
+              raise SystemExit("Could not add shared_preferences to pubspec.yaml.")
+          pub.write_text(ps, encoding="utf-8")
+          print("Added Light/Dark appearance menu and saved preference.")
+          PY
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
