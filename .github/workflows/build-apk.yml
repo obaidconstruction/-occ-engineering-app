@@ -34,7 +34,7 @@ jobs:
           mkdir -p app
           unzip -q "$ZIP_PATH" -d app
 
-          PROJECT_DIR=$(find app -name pubspec.yaml -printf '%h\\n' | head -n 1)
+          PROJECT_DIR=$(find app -name pubspec.yaml -printf '%h\n' | head -n 1)
 
           if [ -z "$PROJECT_DIR" ]; then
             echo "ERROR: Flutter project not found!"
@@ -56,7 +56,7 @@ jobs:
                   lines[i] = lines[i].rstrip()[:-1]
               else:
                   raise SystemExit(f"Unexpected source at lib/main.dart:{n}: {lines[i] if i < len(lines) else 'EOF'}")
-          p.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+          p.write_text("\n".join(lines) + "\n", encoding="utf-8")
           print("Corrected the three extra closing braces.")
           PY
 
