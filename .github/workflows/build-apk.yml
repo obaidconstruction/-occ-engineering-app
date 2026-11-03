@@ -214,6 +214,13 @@ jobs:
           print("Camera photo capture and reference-based measurement enabled.")
           PY
 
+      - name: Inspect app theme entry points
+        run: |
+          echo "=== MAIN DART THEME REFERENCES ==="
+          grep -n -E "MaterialApp|ThemeData|themeMode|runApp|class .*App|Scaffold" "$APP_DIR/lib/main.dart" | head -n 100
+          echo "=== MAIN DART START ==="
+          sed -n '1,240p' "$APP_DIR/lib/main.dart"
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
